@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { ably } from '../lib/ablyClient'
 import { supabase } from '../lib/supabaseClient'
+import { data } from 'react-router-dom'
 
 export default function ChatBox() {
   const [messages, setMessages] = useState([])
@@ -12,9 +13,14 @@ export default function ChatBox() {
   useEffect(() => {
     // Récupère l'utilisateur connecté une seule fois
     const getUserEmail = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      setUserEmail(user?.email || '')
+    const { data, error } = await supabase.auth.getUser()
+    if (error) {
+      console.error('Erreur récupération utilisateur:', error)
+      setUserEmail('')
+    } else {
+      setUserEmail(data?.user?.email || '')
     }
+  }
 
     getUserEmail()
 
