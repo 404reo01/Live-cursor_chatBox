@@ -1,0 +1,13 @@
+{
+  "name": "live-cursor-app",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "vite",
+    "start": "vite",
+    "build": "vite build"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.50.2",
+    "react-router-dom": "^7.6.2"
+  }
+}
