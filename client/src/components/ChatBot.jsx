@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { ably } from '../lib/ablyClient'
 import { supabase } from '../lib/supabaseClient'
-import { data } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 
 export default function ChatBox() {
   const [messages, setMessages] = useState([])
@@ -9,21 +9,32 @@ export default function ChatBox() {
   const [userEmail, setUserEmail] = useState('')
   const messagesEndRef = useRef(null)
   const channel = ably.channels.get('chat-global')
+  const navigate = useNavigate()
 
   useEffect(() => {
     // Récupère l'utilisateur connecté une seule fois
     const getUserEmail = async () => {
-    const { data, error } = await supabase.auth.getUser()
-    if (error) {
-      console.error('Erreur récupération utilisateur:', error)
-      setUserEmail('')
-    } else {
-      setUserEmail(data?.user?.email || '')
+      const { data, error } = await supabase.auth.getUser()
+      if (error) {
+        setUserEmail('')
+      } else {
+        setUserEmail(data?.user?.email || '')
+      }
     }
-  }
+
+    // Récupère les messages persistants depuis Supabase
+    const fetchMessages = async () => {
+      const { data, error } = await supabase
+        .from('messages')
+        .select('*')
+        .order('created_at', { ascending: true })
+      if (!error && data) setMessages(data)
+    }
 
     getUserEmail()
+    fetchMessages()
 
+    // Abonnement temps réel Ably
     channel.subscribe('message', (msg) => {
       setMessages((prev) => [...prev, msg.data])
     })
@@ -44,11 +55,25 @@ export default function ChatBox() {
     const message = {
       sender: userEmail || 'Anonyme',
       content: input.trim(),
-      timestamp: Date.now(),
+      // created_at sera généré automatiquement par Supabase
     }
 
-    channel.publish('message', message)
-    setInput('')
+    // Ajoute le message dans la BDD
+    const { error } = await supabase.from('messages').insert([message])
+    if (!error) {
+      // Envoie aussi sur Ably pour le temps réel
+      channel.publish('message', {
+        ...message,
+        created_at: new Date().toISOString(),
+      })
+      setInput('')
+    }
+  }
+
+  // Fonction logout
+  const handleLogout = async () => {
+    await supabase.auth.signOut()
+    navigate('/signup')
   }
 
   return (
@@ -56,6 +81,9 @@ export default function ChatBox() {
       <div style={styles.sidebar}>
         <div style={styles.logo}>💬</div>
         <div style={styles.channelSelected}># général</div>
+        <button style={styles.logoutButton} onClick={handleLogout}>
+          Déconnexion
+        </button>
       </div>
       <div style={styles.chatContainer}>
         <div style={styles.header}>
@@ -66,7 +94,7 @@ export default function ChatBox() {
             const isMine = msg.sender === userEmail
             return (
               <div
-                key={idx}
+                key={msg.id || idx}
                 style={{
                   ...styles.message,
                   alignSelf: isMine ? 'flex-end' : 'flex-start',
@@ -78,6 +106,9 @@ export default function ChatBox() {
               >
                 <div style={styles.sender}>
                   {msg.sender}
+                  <span style={{ fontWeight: 400, fontSize: 11, marginLeft: 8, color: '#888' }}>
+                    {msg.created_at && new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </span>
                 </div>
                 <div>{msg.content}</div>
               </div>
@@ -131,6 +162,19 @@ const styles = {
     marginBottom: 8,
     cursor: 'pointer',
     textAlign: 'center',
+  },
+  logoutButton: {
+    marginTop: 24,
+    padding: '10px 12px',
+    borderRadius: 6,
+    border: 'none',
+    background: '#fa7777',
+    color: '#fff',
+    fontWeight: 600,
+    fontSize: 15,
+    cursor: 'pointer',
+    fontFamily: 'Segoe UI, sans-serif',
+    transition: 'background 0.2s',
   },
   chatContainer: {
     flex: 1,

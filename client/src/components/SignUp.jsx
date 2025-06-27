@@ -10,18 +10,32 @@ export default function SignUp() {
 
   const handleSignUp = async () => {
     setErrorMsg('')
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-    })
+    const { error: signUpError } = await supabase.auth.signUp({ email, password })
 
-    if (error) {
-      setErrorMsg(error.message)
-    } else {
-      navigate('/app')
+    if (signUpError) {
+      setErrorMsg(signUpError.message)
+      return
     }
+
+    // Connexion automatique après inscription
+    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password })
+    if (signInError) {
+      setErrorMsg(signInError.message)
+      return
+    }
+
+    navigate('/app')
   }
 
+  const handleGoToLogin = async () => {
+  setErrorMsg('')
+  const { error: signInError } = await supabase.auth.signInWithPassword({ email, password })
+  if (signInError) {
+    setErrorMsg(signInError.message)
+    return
+  }
+  navigate('/app')
+}
   return (
     <div style={styles.container}>
       <div style={styles.card}>
@@ -41,7 +55,10 @@ export default function SignUp() {
           onChange={e => setPassword(e.target.value)}
         />
         <button style={styles.button} onClick={handleSignUp}>
-          S'inscrire
+          Créer un compte
+        </button>
+        <button style={{ ...styles.button, background: '#3ba55d', marginTop: 0 }} onClick={handleGoToLogin}>
+          Se connecter à un compte existant
         </button>
         {errorMsg && <p style={styles.error}>{errorMsg}</p>}
       </div>
